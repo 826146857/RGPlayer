@@ -17,7 +17,7 @@ android {
 
     signingConfigs {
         debug {
-            storeFile file('../../github/RGPlayer/keystore/rgplayer.keystore')
+            storeFile file('../keystore/rgplayer.keystore')
             storePassword 'rgplayer'
             keyAlias 'rgplayer'
             keyPassword 'rgplayer'
