@@ -72,6 +72,7 @@ HANDOFF.md                         接手提示词（新会话先读）
 ### v1.0.0
 - 加入 GitHub 更新检查：点击「更新」→ 检测最新 Release → 有新版本按钮变「下载」→ 下载到 `Download/RGPlayer-<版本>.apk` → 完成后「安装」
 - 更新源：`https://api.github.com/repos/826146857/RGPlayer/releases/latest`
+- 下载优先走 GitHub API 资源地址，失败时自动切换镜像（ghproxy / gh-proxy）
 - 签名与 Release 一致（仓库内 `keystore/rgplayer.keystore`）
 
 ## 说明

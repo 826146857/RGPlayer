@@ -96,7 +96,7 @@ androidx/media3/decoder/ffmpeg/LoudnessAnalyzer.java  响度分析（90 分位 �
 10. **设置页单击生效**：行不要设 `focusableInTouchMode`，否则第一次点击只聚焦不触发。
 11. **说明页/设置页编码**：历史上有文件被 PowerShell 读写弄坏过；本仓库文件均为 UTF-8。改文件优先用 write/edit，不要用 `Set-Content` 默认编码。
 12. **adb 手势坐标**：`input motionevent` 坐标约为应用坐标 2×，注入边缘/双指手势时注意。
-13. **更新器**：GitHub API 必须带 `User-Agent`；下载文件写入系统 Download（MediaStore，API29+），命名 `RGPlayer-<版本>.apk`；安装前检查 `canRequestPackageInstalls`。
+13. **更新器**：GitHub API 必须带 `User-Agent`；下载优先用 API asset 地址（`Accept: application/octet-stream`，可绕开 github.com 直连被墙），失败再试 browser_download_url 和 ghproxy/gh-proxy 镜像；文件写入系统 Download（MediaStore，API29+），命名 `RGPlayer-<版本>.apk`；安装前检查 `canRequestPackageInstalls`。
 
 ## 6. 构建 / 发布流程
 

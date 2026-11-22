@@ -21,6 +21,7 @@ public class SettingsActivity extends AppCompatActivity {
     private int updateState;            // 0 未检查 1 检测中 2 有新版本 3 下载中 4 待安装
     private String updateTag;
     private String updateAssetUrl;
+    private String updateAssetApiUrl;
     private Uri updateApkUri;
     private static final String UPDATE_API =
             "https://api.github.com/repos/826146857/RGPlayer/releases/latest"; 
@@ -193,6 +194,7 @@ public class SettingsActivity extends AppCompatActivity {
                 org.json.JSONArray assets = o.optJSONArray("assets");
                 if (assets != null && assets.length() > 0) {
                     asset = assets.getJSONObject(0).optString("browser_download_url");
+                    updateAssetApiUrl = assets.getJSONObject(0).optString("url");
                 }
                 final String ftag = tag;
                 final String fasset = asset;
@@ -217,6 +219,7 @@ public class SettingsActivity extends AppCompatActivity {
                     }
                 });
             } catch (Exception e) {
+                android.util.Log.e("RGUpdate", "check failed: " + e, e);
                 runOnUiThread(() -> {
                     updateState = 0;
                     setUpdateValue("检查");
@@ -261,14 +264,45 @@ public class SettingsActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 java.io.File tmp = new java.io.File(getCacheDir(), "update.apk");
-                java.net.HttpURLConnection c =
-                        (java.net.HttpURLConnection) new java.net.URL(updateAssetUrl).openConnection();
-                c.setInstanceFollowRedirects(true);
-                c.setConnectTimeout(20000);
-                c.setRequestProperty("User-Agent", "RGPlayer-Updater");
-                c.setReadTimeout(30000);
-                int total = c.getContentLength();
-                java.io.InputStream in = c.getInputStream();
+                String[] sources = new String[] {
+                        updateAssetApiUrl,
+                        updateAssetUrl,
+                        "https://ghproxy.net/" + updateAssetUrl,
+                        "https://gh-proxy.com/" + updateAssetUrl
+                };
+                java.net.HttpURLConnection c = null;
+                java.io.InputStream in = null;
+                int total = -1;
+                Exception last = null;
+                for (String src : sources) {
+                    if (src == null || src.isEmpty()) continue;
+                    try {
+                        java.net.HttpURLConnection cand =
+                                (java.net.HttpURLConnection) new java.net.URL(src).openConnection();
+                        cand.setInstanceFollowRedirects(true);
+                        cand.setConnectTimeout(12000);
+                        cand.setReadTimeout(30000);
+                        cand.setRequestProperty("User-Agent", "RGPlayer-Updater");
+                        if (src.equals(updateAssetApiUrl)) {
+                            cand.setRequestProperty("Accept", "application/octet-stream");
+                        }
+                        int code = cand.getResponseCode();
+                        if (code >= 400) {
+                            last = new java.io.IOException("HTTP " + code + " for " + src);
+                            cand.disconnect();
+                            continue;
+                        }
+                        in = cand.getInputStream();
+                        c = cand;
+                        total = cand.getContentLength();
+                        android.util.Log.i("RGUpdate", "downloading from " + src + " len=" + total);
+                        break;
+                    } catch (Exception e) {
+                        last = e;
+                        android.util.Log.w("RGUpdate", "source failed: " + src + " -> " + e);
+                    }
+                }
+                if (in == null) throw last == null ? new java.io.IOException("no mirror") : last;
                 java.io.FileOutputStream out = new java.io.FileOutputStream(tmp);
                 byte[] buf = new byte[8192];
                 long got = 0;
@@ -297,6 +331,7 @@ public class SettingsActivity extends AppCompatActivity {
                             android.widget.Toast.LENGTH_LONG).show();
                 });
             } catch (Exception e) {
+                android.util.Log.e("RGUpdate", "download failed: " + e, e);
                 runOnUiThread(() -> {
                     updateState = 2;
                     setUpdateValue("下载");
