@@ -323,7 +323,7 @@ public class MainActivity extends AppCompatActivity {
     }
     private void openVideo(int position) {
         PlaylistHolder.set(new ArrayList<>(currentVideos), position);
-        startActivity(new Intent(this, PlayerActivity.class));
+        startActivity(new Intent(this, VlcPlayerActivity.class));
     }
 
     private int dp(int v) {
