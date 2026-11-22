@@ -1,7 +1,7 @@
 # RGPlayer 接手提示词（新会话 / 新电脑先读这份）
 
 > 你是接手 RGPlayer 项目的编码助手。读完本文件再动手，可以立即继续开发，不需要重新摸索。
-> 本文最后更新：v0.48.3（首个开源版本）。
+> 本文最后更新：v1.0.0（首个带在线更新的正式版）。
 
 ## 1. 项目是什么
 
@@ -113,9 +113,10 @@ GitHub Release：tag `v<version>`，上传 APK 作为 asset，更新器读取 `r
 
 ## 7. 当前状态与待办
 
-- 当前版本：**v0.48.3（首个开源版，不含更新功能）**
-- 下一版 **v1.0.0**：加入 GitHub 更新（仓库 `826146857/RGPlayer`）
-- 更新器 API 常量在 `SettingsActivity.UPDATE_API`：`https://api.github.com/repos/826146857/RGPlayer/releases/latest`
+- 当前版本：**v1.0.0**
+- 更新器 API：`https://api.github.com/repos/826146857/RGPlayer/releases/latest`
+- 仓库自带签名 keystore：`keystore/rgplayer.keystore`（密码 rgplayer），保证 Release 与本地构建签名一致；换签名会导致无法覆盖安装
+- GitHub：https://github.com/826146857/RGPlayer
 - 字体文件较大（31MB），如仓库过大可考虑改为单独发布 / LFS，但要同步修改 `FontApplier`
 - 可考虑：字幕字体随设置字体、更多手势、播放列表页（用户目前明确不要）
 

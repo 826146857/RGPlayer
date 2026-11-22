@@ -16,7 +16,14 @@ public class SettingsActivity extends AppCompatActivity {
 
     private TextView valueResize;
     private TextView valueMediaDir;
-    private View firstRow; // TODO: 换成实际仓库
+    private View firstRow;
+    private TextView valueUpdate;
+    private int updateState;            // 0 未检查 1 检测中 2 有新版本 3 下载中 4 待安装
+    private String updateTag;
+    private String updateAssetUrl;
+    private Uri updateApkUri;
+    private static final String UPDATE_API =
+            "https://api.github.com/repos/826146857/RGPlayer/releases/latest"; 
     private View backBtn;
     private ActivityResultLauncher<Uri> dirPicker;
 
@@ -29,6 +36,7 @@ public class SettingsActivity extends AppCompatActivity {
         findViewById(R.id.btn_back).setOnClickListener(v -> finish());
         valueResize = findViewById(R.id.value_resize);
         valueMediaDir = findViewById(R.id.value_media_dir);
+        valueUpdate = findViewById(R.id.value_update);
 
         dirPicker = registerForActivityResult(new ActivityResultContracts.OpenDocumentTree(), uri -> {
             if (uri == null) return;
@@ -72,6 +80,7 @@ public class SettingsActivity extends AppCompatActivity {
         swNoMedia.setChecked(Settings.getHideNoMedia(this));
         swNoMedia.setOnCheckedChangeListener((b, checked) -> Settings.setHideNoMedia(this, checked));
 
+        findViewById(R.id.row_update).setOnClickListener(v -> onUpdateClick());
 
         findViewById(R.id.row_help).setOnClickListener(v ->
                 startActivity(new android.content.Intent(this, HelpActivity.class)));
@@ -140,6 +149,220 @@ public class SettingsActivity extends AppCompatActivity {
             return removed;
         } catch (Throwable t) {
             return 0;
+        }
+    }
+
+
+    private void onUpdateClick() {
+        switch (updateState) {
+            case 0: checkUpdate(); break;
+            case 2: downloadUpdate(); break;
+            case 4: installUpdate(); break;
+            default: break;
+        }
+    }
+
+    private void setUpdateValue(String t) {
+        if (valueUpdate != null) valueUpdate.setText(t);
+    }
+
+    private void checkUpdate() {
+        if (UPDATE_API.contains("OWNER/REPO")) {
+            android.widget.Toast.makeText(this, "更新源还没配置", android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        updateState = 1;
+        setUpdateValue("检测中…");
+        new Thread(() -> {
+            try {
+                java.net.HttpURLConnection c =
+                        (java.net.HttpURLConnection) new java.net.URL(UPDATE_API).openConnection();
+                c.setRequestProperty("Accept", "application/vnd.github+json");
+                c.setRequestProperty("User-Agent", "RGPlayer-Updater");
+                c.setConnectTimeout(15000);
+                c.setReadTimeout(15000);
+                java.io.BufferedReader br = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(c.getInputStream()));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = br.readLine()) != null) sb.append(line);
+                br.close();
+                org.json.JSONObject o = new org.json.JSONObject(sb.toString());
+                String tag = o.optString("tag_name");
+                String asset = null;
+                org.json.JSONArray assets = o.optJSONArray("assets");
+                if (assets != null && assets.length() > 0) {
+                    asset = assets.getJSONObject(0).optString("browser_download_url");
+                }
+                final String ftag = tag;
+                final String fasset = asset;
+                runOnUiThread(() -> {
+                    String cur = "";
+                    try {
+                        cur = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+                    } catch (Exception ignored) {
+                    }
+                    if (fasset != null && !fasset.isEmpty() && isNewer(ftag, cur)) {
+                        updateTag = ftag;
+                        updateAssetUrl = fasset;
+                        updateState = 2;
+                        setUpdateValue("下载");
+                        android.widget.Toast.makeText(this, "发现新版本 " + ftag,
+                                android.widget.Toast.LENGTH_SHORT).show();
+                    } else {
+                        updateState = 0;
+                        setUpdateValue("检查");
+                        android.widget.Toast.makeText(this, "已是最新版本",
+                                android.widget.Toast.LENGTH_SHORT).show();
+                    }
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    updateState = 0;
+                    setUpdateValue("检查");
+                    android.widget.Toast.makeText(this, "检查更新失败",
+                            android.widget.Toast.LENGTH_SHORT).show();
+                });
+            }
+        }).start();
+    }
+
+    private static boolean isNewer(String tag, String current) {
+        if (tag == null || current == null) return false;
+        String a = tag.replaceAll("[^0-9.]", "");
+        String b = current.replaceAll("[^0-9.]", "");
+        String[] pa = a.split("\\.");
+        String[] pb = b.split("\\.");
+        int n = Math.max(pa.length, pb.length);
+        for (int i = 0; i < n; i++) {
+            int x = i < pa.length ? parseIntSafe(pa[i]) : 0;
+            int y = i < pb.length ? parseIntSafe(pb[i]) : 0;
+            if (x > y) return true;
+            if (x < y) return false;
+        }
+        return false;
+    }
+
+    private static int parseIntSafe(String s) {
+        try {
+            return Integer.parseInt(s.trim());
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private void downloadUpdate() {
+        if (updateAssetUrl == null) return;
+        updateState = 3;
+        setUpdateValue("下载中…");
+        String tagClean = updateTag == null ? "" : updateTag.replaceAll("[^0-9A-Za-z._-]", "");
+        if (tagClean.startsWith("v") || tagClean.startsWith("V")) tagClean = tagClean.substring(1);
+        final String name = "RGPlayer-" + tagClean + ".apk";
+        new Thread(() -> {
+            try {
+                java.io.File tmp = new java.io.File(getCacheDir(), "update.apk");
+                java.net.HttpURLConnection c =
+                        (java.net.HttpURLConnection) new java.net.URL(updateAssetUrl).openConnection();
+                c.setInstanceFollowRedirects(true);
+                c.setConnectTimeout(20000);
+                c.setRequestProperty("User-Agent", "RGPlayer-Updater");
+                c.setReadTimeout(30000);
+                int total = c.getContentLength();
+                java.io.InputStream in = c.getInputStream();
+                java.io.FileOutputStream out = new java.io.FileOutputStream(tmp);
+                byte[] buf = new byte[8192];
+                long got = 0;
+                int r;
+                int lastPct = -1;
+                while ((r = in.read(buf)) > 0) {
+                    out.write(buf, 0, r);
+                    got += r;
+                    if (total > 0) {
+                        int pct = (int) (got * 100 / total);
+                        if (pct / 5 != lastPct / 5) {
+                            lastPct = pct;
+                            final int p = pct;
+                            runOnUiThread(() -> setUpdateValue("下载中 " + p + "%"));
+                        }
+                    }
+                }
+                out.close();
+                in.close();
+                Uri uri = saveToDownloads(tmp, name);
+                runOnUiThread(() -> {
+                    updateApkUri = uri;
+                    updateState = 4;
+                    setUpdateValue("安装");
+                    android.widget.Toast.makeText(this, "已保存到 Download/" + name,
+                            android.widget.Toast.LENGTH_LONG).show();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    updateState = 2;
+                    setUpdateValue("下载");
+                    android.widget.Toast.makeText(this, "下载失败",
+                            android.widget.Toast.LENGTH_SHORT).show();
+                });
+            }
+        }).start();
+    }
+
+    private Uri saveToDownloads(java.io.File src, String name) throws Exception {
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            android.content.ContentValues cv = new android.content.ContentValues();
+            cv.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name);
+            cv.put(android.provider.MediaStore.MediaColumns.MIME_TYPE,
+                    "application/vnd.android.package-archive");
+            cv.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                    android.os.Environment.DIRECTORY_DOWNLOADS);
+            cv.put(android.provider.MediaStore.MediaColumns.IS_PENDING, 1);
+            Uri uri = getContentResolver().insert(
+                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+            if (uri == null) throw new java.io.IOException("insert failed");
+            java.io.OutputStream os = getContentResolver().openOutputStream(uri);
+            copy(src, os);
+            cv.clear();
+            cv.put(android.provider.MediaStore.MediaColumns.IS_PENDING, 0);
+            getContentResolver().update(uri, cv, null, null);
+            return uri;
+        }
+        java.io.File dir = android.os.Environment
+                .getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
+        if (!dir.exists()) dir.mkdirs();
+        java.io.File dst = new java.io.File(dir, name);
+        copy(src, new java.io.FileOutputStream(dst));
+        return androidx.core.content.FileProvider.getUriForFile(this,
+                getPackageName() + ".fileprovider", dst);
+    }
+
+    private static void copy(java.io.File src, java.io.OutputStream os) throws Exception {
+        java.io.FileInputStream in = new java.io.FileInputStream(src);
+        byte[] buf = new byte[8192];
+        int r;
+        while ((r = in.read(buf)) > 0) os.write(buf, 0, r);
+        in.close();
+        os.close();
+    }
+
+    private void installUpdate() {
+        if (updateApkUri == null) return;
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 26
+                    && !getPackageManager().canRequestPackageInstalls()) {
+                android.widget.Toast.makeText(this, "请允许安装未知应用后，再点一次安装",
+                        android.widget.Toast.LENGTH_LONG).show();
+                startActivity(new android.content.Intent(
+                        android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:" + getPackageName())));
+                return;
+            }
+            android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW)
+                    .setDataAndType(updateApkUri, "application/vnd.android.package-archive")
+                    .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            | android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+        } catch (Exception e) {
+            android.widget.Toast.makeText(this, "无法启动安装", android.widget.Toast.LENGTH_SHORT).show();
         }
     }
 

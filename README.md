@@ -4,8 +4,6 @@
 
 目标：在掌机上把本地播放体验做到比 MX Player 更顺手 —— 无广告、无联网、全手柄操作、深色界面、纯本地媒体库。
 
-![首页](docs/screenshots/rg_final_home.png)
-
 ## 特性
 
 - **本地媒体库**：MediaStore 扫描，自然排序，三列圆角卡片；单文件夹自动展开；下拉刷新真实重扫
@@ -55,7 +53,6 @@ app/src/main/java/com/rg/player/   应用代码（见 HANDOFF.md 的代码地图
 app/src/main/res/                  布局、颜色、字体、图标
 androidx/media3/decoder/ffmpeg/    响度分析（复用媒体库包名）
 docs/使用说明.md                    面向用户的说明
-docs/screenshots/                  截图
 HANDOFF.md                         接手提示词（新会话先读）
 ```
 
@@ -73,7 +70,9 @@ HANDOFF.md                         接手提示词（新会话先读）
 - 首页三列卡片、下拉刷新、封面、字幕/音轨、手势、长按调速、缩放旋转平移与还原、视频信息、字体切换、设置页
 
 ### v1.0.0
-- 加入 GitHub 更新检查：检测 → 下载到 `Download/RGPlayer-<版本>.apk` → 安装
+- 加入 GitHub 更新检查：点击「更新」→ 检测最新 Release → 有新版本按钮变「下载」→ 下载到 `Download/RGPlayer-<版本>.apk` → 完成后「安装」
+- 更新源：`https://api.github.com/repos/826146857/RGPlayer/releases/latest`
+- 签名与 Release 一致（仓库内 `keystore/rgplayer.keystore`）
 
 ## 说明
 
