@@ -21,6 +21,17 @@
 - **字体**：系统字体 / 内置字体切换
 - **设置**：画面比例、媒体目录、内置字体、隐藏 `.nomedia`、更新、说明、清除缓存
 
+## GBA 影片（v2.1 预览）
+
+设置 →「GBA 影片」可播放 **M3 电影卡生成的 `.gba` 电影 ROM**（内置 mGBA libretro 核心，NDK 构建前端）：
+
+- 自动扫描机身存储与 SD 卡里的 `.gba` 文件（MediaStore 不索引 `.gba`，会走文件系统扫描）
+- 真机手柄映射：A / B / L / R / START / SELECT / 十字键；BACK 退出
+- SRAM 存档保存在应用私有目录（`files/gba/saves`），下次打开自动读取
+- 视频按 240×160 等比缩放到 720 方屏，音频重采样到 48kHz
+
+注意：GBM/GBS 是 M3 引擎的裸流私有格式，普通播放器无法解码；本功能只针对打包好的 `.gba` ROM。
+
 ## 下载
 
 在 [Releases](https://github.com/826146857/RGPlayer/releases) 下载最新的 `RGPlayer-<版本>.apk` 安装即可（Android 12 掌机，免 root）。
@@ -68,6 +79,7 @@ app/src/main/java/com/rg/player/
 ## 技术栈
 
 - Java + libVLC（`org.videolan.android:libvlc-all:3.6.5`，arm64-v8a）
+- GBA：mGBA libretro 核心（MPL-2.0）+ 自写 JNI 前端（NDK 27 / CMake）
 - minSdk 26 / targetSdk 34 / compileSdk 35
 - AGP 8.6.1、Gradle 8.7
 
@@ -96,3 +108,8 @@ app/src/main/java/com/rg/player/
 ## License
 
 GPLv3，详见 [LICENSE](LICENSE)。
+
+第三方组件：
+- libVLC / VLC for Android：LGPLv2.1+（动态链接）
+- mGBA libretro 核心：MPL-2.0（https://mgba.io）
+- libretro API 头文件：MIT / 见 libretro-common

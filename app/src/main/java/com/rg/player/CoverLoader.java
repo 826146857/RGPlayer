@@ -36,21 +36,78 @@ public final class CoverLoader {
         CACHE.evictAll();
     }
 
+    public static int prune(android.content.Context c, java.util.Set<String> alivePaths) {
+        int removed = 0;
+        java.io.File dir = new java.io.File(c.getCacheDir(), "covers");
+        java.io.File[] files = dir.listFiles();
+        if (files == null) return 0;
+        java.util.Set<String> keep = new java.util.HashSet<>();
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
+            for (String path : alivePaths) {
+                for (String size : new String[]{"360x204", "360x360"}) {
+                    String key = path + "|" + size + "|c2";
+                    byte[] d = md.digest(key.getBytes("UTF-8"));
+                    StringBuilder sb = new StringBuilder();
+                    for (byte b : d) sb.append(String.format(java.util.Locale.US, "%02x", b));
+                    keep.add(sb + ".jpg");
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        for (java.io.File f : files) {
+            if (keep.contains(f.getName())) continue;
+            if (f.delete()) removed++;
+        }
+        return removed;
+    }
+
     public static Bitmap load(android.content.Context context, VideoItem item, int reqW, int reqH) {
-        String key = (item.path != null ? item.path : item.uri.toString()) + "|" + reqW + "x" + reqH;
+        String key = (item.path != null ? item.path : item.uri.toString()) + "|" + reqW + "x" + reqH + "|c2";
         Bitmap cached = CACHE.get(key);
         if (cached != null) return cached;
 
         File cover = findCoverFile(item);
         Bitmap bmp = cover != null ? decode(cover, reqW, reqH) : null;
         if (bmp == null && context != null) {
-            bmp = firstFrame(context, item, reqW, reqH);
+            // 首帧封面落盘，下次进软件直接读文件，不再重新解视频
+            File disk = coverFile(context, key);
+            if (disk.isFile()) {
+                bmp = decode(disk, reqW, reqH);
+            }
+            if (bmp == null) {
+                bmp = firstFrame(context, item, reqW, reqH);
+                if (bmp != null) saveCover(disk, bmp);
+            }
         }
         if (bmp != null) CACHE.put(key, bmp);
         return bmp;
     }
 
-    /** 没有封面文件时取第一帧，只在内存里用，不写任何缓存文件。 */
+    private static File coverFile(android.content.Context c, String key) {
+        File dir = new File(c.getCacheDir(), "covers");
+        if (!dir.exists()) dir.mkdirs();
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
+            byte[] hash = md.digest(key.getBytes("UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) sb.append(String.format("%02x", b));
+            return new File(dir, sb + ".jpg");
+        } catch (Exception e) {
+            return new File(dir, Math.abs(key.hashCode()) + ".jpg");
+        }
+    }
+
+    private static void saveCover(File file, Bitmap bmp) {
+        try {
+            java.io.FileOutputStream out = new java.io.FileOutputStream(file);
+            bmp.compress(Bitmap.CompressFormat.JPEG, 85, out);
+            out.close();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 没有封面文件时取第一帧；生成的封面会缓存到 cache/covers。 */
     private static Bitmap firstFrame(android.content.Context context, VideoItem item, int reqW, int reqH) {
         android.media.MediaMetadataRetriever retriever = new android.media.MediaMetadataRetriever();
         try {
@@ -88,7 +145,7 @@ public final class CoverLoader {
                 if (!isFlat(best) && !isPattern(best)) break;
             }
             if (best == null) return null;
-            return scale(best, reqW, reqH);
+            return scale(trimBlackBars(best), reqW, reqH);
         } catch (Throwable t) {
             return null;
         } finally {
@@ -160,13 +217,60 @@ public final class CoverLoader {
         return total > 0 && colored / (float) total > 0.5f;
     }
 
+    private static boolean rowIsBlack(Bitmap b, int y) {
+        int w = b.getWidth();
+        int step = Math.max(1, w / 24);
+        int dark = 0, total = 0;
+        for (int x = 0; x < w; x += step) {
+            int c = b.getPixel(x, y);
+            int r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, bl = c & 0xFF;
+            if ((r + g + bl) / 3 < 18) dark++;
+            total++;
+        }
+        return total > 0 && dark * 100 / total >= 90;
+    }
+
+    private static Bitmap trimBlackBars(Bitmap src) {
+        int w = src.getWidth(), h = src.getHeight();
+        int limitY = h * 35 / 100, limitX = w * 35 / 100;
+        int top = 0, bottom = h, left = 0, right = w;
+        while (top < limitY && rowIsBlack(src, top)) top += Math.max(1, h / 200);
+        while (bottom > h - limitY && rowIsBlack(src, bottom - 1)) bottom -= Math.max(1, h / 200);
+        while (left < limitX && colIsBlack(src, left)) left += Math.max(1, w / 200);
+        while (right > w - limitX && colIsBlack(src, right - 1)) right -= Math.max(1, w / 200);
+        if (top == 0 && bottom == h && left == 0 && right == w) return src;
+        try {
+            Bitmap out = Bitmap.createBitmap(src, left, top, right - left, bottom - top);
+            if (out != src) src.recycle();
+            return out;
+        } catch (Throwable t) {
+            return src;
+        }
+    }
+
+    private static boolean colIsBlack(Bitmap b, int x) {
+        int h = b.getHeight();
+        int step = Math.max(1, h / 24);
+        int dark = 0, total = 0;
+        for (int y = 0; y < h; y += step) {
+            int c = b.getPixel(x, y);
+            int r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, bl = c & 0xFF;
+            if ((r + g + bl) / 3 < 18) dark++;
+            total++;
+        }
+        return total > 0 && dark * 100 / total >= 90;
+    }
+
     private static Bitmap scale(Bitmap src, int reqW, int reqH) {
-        if (src.getWidth() <= reqW && src.getHeight() <= reqH) return src;
-        float ratio = Math.min((float) reqW / src.getWidth(), (float) reqH / src.getHeight());
-        int w = Math.max(1, Math.round(src.getWidth() * ratio));
-        int h = Math.max(1, Math.round(src.getHeight() * ratio));
-        Bitmap out = Bitmap.createScaledBitmap(src, w, h, true);
-        if (out != src) src.recycle();
+        float ratio = Math.max((float) reqW / src.getWidth(), (float) reqH / src.getHeight());
+        int w = Math.max(reqW, Math.round(src.getWidth() * ratio));
+        int h = Math.max(reqH, Math.round(src.getHeight() * ratio));
+        Bitmap scaled = Bitmap.createScaledBitmap(src, w, h, true);
+        if (scaled != src) src.recycle();
+        int x = Math.max(0, (w - reqW) / 2);
+        int y = Math.max(0, (h - reqH) / 2);
+        Bitmap out = Bitmap.createBitmap(scaled, x, y, Math.min(reqW, w), Math.min(reqH, h));
+        if (out != scaled) scaled.recycle();
         return out;
     }
 

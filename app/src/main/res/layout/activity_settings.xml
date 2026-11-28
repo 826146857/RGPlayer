@@ -3,7 +3,13 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg"
-    android:fillViewport="true">
+    android:fillViewport="true"
+    android:scrollbars="vertical"
+    android:fadeScrollbars="true"
+    android:scrollbarSize="4dp"
+    android:scrollbarStyle="insideInset"
+    android:scrollbarFadeDuration="400"
+    android:scrollbarThumbVertical="@drawable/scroll_thumb">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -65,20 +71,20 @@
                 <TextView android:id="@+id/value_media_dir" style="@style/SettingsValue" android:text="全部" />
             </LinearLayout>
 
-            <LinearLayout style="@style/SettingsRow">
+            <LinearLayout style="@style/SettingsRow" android:id="@+id/row_font">
                 <LinearLayout style="@style/SettingsTexts">
                     <TextView style="@style/SettingsTitle" android:text="内置字体" />
-                    <TextView style="@style/SettingsHint" android:text="开为应用内置字体，关为系统字体" />
+                    <TextView style="@style/SettingsHint" android:text="点击切换：内置字体 / 系统字体" />
                 </LinearLayout>
-                <Switch android:id="@+id/sw_font" style="@style/SettingsSwitch" />
+                <TextView android:id="@+id/value_font" style="@style/SettingsValue" android:text="内置" />
             </LinearLayout>
 
-            <LinearLayout style="@style/SettingsRow">
+            <LinearLayout style="@style/SettingsRow" android:id="@+id/row_nomedia">
                 <LinearLayout style="@style/SettingsTexts">
                     <TextView style="@style/SettingsTitle" android:text="隐藏 .nomedia 目录" />
-                    <TextView style="@style/SettingsHint" android:text="目录含 .nomedia 的视频不扫描" />
+                    <TextView style="@style/SettingsHint" android:text="点击切换：隐藏 / 显示含 .nomedia 的目录" />
                 </LinearLayout>
-                <Switch android:id="@+id/sw_nomedia" style="@style/SettingsSwitch" />
+                <TextView android:id="@+id/value_nomedia" style="@style/SettingsValue" android:text="隐藏" />
             </LinearLayout>
         </LinearLayout>
 
@@ -87,12 +93,11 @@
             <LinearLayout style="@style/SettingsRow" android:id="@+id/row_update">
                 <LinearLayout style="@style/SettingsTexts">
                     <TextView style="@style/SettingsTitle" android:text="更新" />
-                    <TextView style="@style/SettingsHint" android:text="从 GitHub 检查并下载新版本" />
+                    <TextView style="@style/SettingsHint" android:text="检查并下载新版本" />
                 </LinearLayout>
                 <TextView android:id="@+id/value_update" style="@style/SettingsValue" android:text="检查" />
             </LinearLayout>
-
-            <LinearLayout style="@style/SettingsRow" android:id="@+id/row_help">
+<LinearLayout style="@style/SettingsRow" android:id="@+id/row_help">
                 <LinearLayout style="@style/SettingsTexts">
                     <TextView style="@style/SettingsTitle" android:text="说明" />
                     <TextView style="@style/SettingsHint" android:text="封面命名、手柄手势、隐藏规则" />

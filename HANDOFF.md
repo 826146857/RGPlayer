@@ -45,6 +45,13 @@ app/src/main/java/com/rg/player/
   MarqueeTextView.java    标题跑马灯
   NaturalComparator.java  自然排序
   PlaylistHolder.java     Activity 间播放列表情景
+  GbaCore.java            mGBA libretro 核心 JNI 封装
+  GbaListActivity.java    扫描/列出 .gba 电影卡 ROM
+  GbaPlayerActivity.java  GBA 播放页（视频/音频/手柄/SRAM）
+  GbaView.java            240x160 等比缩放绘制
+  cpp/gba_bridge.c        libretro 前端：dlopen 核心、回调、音频环、SRAM
+  cpp/libretro.h          libretro API 头
+  jniLibs/arm64-v8a/libmgba_core.so  mGBA 核心（2.3MB）
 ```
 
 资源：
@@ -75,6 +82,18 @@ app/src/main/java/com/rg/player/
 
 设置：
 - 默认画面比例、媒体目录（SAF）、内置字体开关、隐藏 .nomedia、更新（GitHub Release 检查/下载/安装）、说明、清除缓存
+
+## 4.5 GBA 影片（M3 电影卡）
+
+- 入口：设置 →「GBA 影片」；扫描 MediaStore（`.gba` 一般不在库里）后回退文件系统遍历（深度 5，跳过 Android/DCIM/Pictures/Music）
+- 核心：libretro mGBA 预编译 `.so` 放 `jniLibs`，JNI 用 `dlopen(nativeLibraryDir/libmgba_core.so)`；必须 `useLegacyPackaging = true`（否则 nativeLibraryDir 里没有文件，dlopen 失败）
+- libretro 前端：`gba_bridge.c` 提供 video/audio/input 回调；视频转 ARGB 给 Java Bitmap；音频环形缓冲，Java 端重采样到 48kHz 写 AudioTrack
+- 线程：render/audio 线程只能在 `onResume` 启动（onCreate 也启动会双写 AudioTrack，触发 `releaseBuffer: mUnreleased out of range` 崩溃）
+- SRAM：`retro_get_memory_data(SAVE_RAM)` 存到 `files/gba/saves/<rom>.sav`，播放/暂停/退出时保存
+- 按键：A/B/L/R/START/SELECT/十字；BACK 退出（B 是 GBA B 键，不退出）
+- 构建：`app/build.gradle` 的 `ndkPath` 指向本机 NDK 27.2.12479018，`externalNativeBuild` 用 CMake 3.22.1；换机器需改 ndkPath
+- 测试 ROM：`gba_test.gba`（自写 248 字节，蓝屏+调色板）可验证核心链路；M3 官方播放器 `filmplay.gba` 可启动
+- GBM/GBS 是 M3 私有裸流，无法用普通播放器或本核心播放，别混淆
 
 ## 5. 关键实现细节与坑（VLC 版）
 

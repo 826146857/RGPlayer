@@ -2,6 +2,8 @@
 <resources>
     <style name="Theme.RGPlayer" parent="Theme.AppCompat.NoActionBar">
         <item name="android:windowBackground">@color/bg</item>
+        <item name="android:defaultFocusHighlightEnabled">false</item>
+        <item name="android:colorControlHighlight">@android:color/transparent</item>
         <item name="android:statusBarColor">@color/bg</item>
         <item name="android:navigationBarColor">@color/bg</item>
         <item name="android:colorAccent">@color/accent</item>
@@ -21,12 +23,12 @@
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_marginLeft">12dp</item>
         <item name="android:layout_marginRight">12dp</item>
-        <item name="android:layout_marginTop">2dp</item>
-        <item name="android:background">@drawable/bg_card</item>
+        <item name="android:layout_marginTop">8dp</item>
+        <item name="android:background">@android:color/transparent</item>
         <item name="android:orientation">vertical</item>
-        <item name="android:paddingTop">2dp</item>
-        <item name="android:paddingBottom">2dp</item>
-        <item name="android:divider">@drawable/divider</item>
+        <item name="android:paddingTop">0dp</item>
+        <item name="android:paddingBottom">0dp</item>
+        <item name="android:divider">@null</item>
         <item name="android:showDividers">middle</item>
     </style>
 
@@ -35,10 +37,14 @@
         <item name="android:layout_height">wrap_content</item>
         <item name="android:gravity">center_vertical</item>
         <item name="android:orientation">horizontal</item>
+        <item name="android:layout_marginLeft">0dp</item>
+        <item name="android:layout_marginRight">0dp</item>
+        <item name="android:layout_marginTop">3dp</item>
+        <item name="android:background">@drawable/bg_card</item>
         <item name="android:paddingLeft">16dp</item>
         <item name="android:paddingRight">16dp</item>
-        <item name="android:paddingTop">4dp</item>
-        <item name="android:paddingBottom">4dp</item>
+        <item name="android:paddingTop">6dp</item>
+        <item name="android:paddingBottom">6dp</item>
     </style>
 
     <style name="SettingsTexts">
@@ -73,5 +79,12 @@
     <style name="SettingsSwitch">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
+    </style>
+    <style name="RGScroll" parent="@android:style/Widget.ScrollView">
+        <item name="android:scrollbarThumbVertical">@drawable/scroll_thumb</item>
+        <item name="android:scrollbarSize">4dp</item>
+        <item name="android:scrollbarStyle">insideInset</item>
+        <item name="android:fadeScrollbars">true</item>
+        <item name="android:scrollbarFadeDuration">400</item>
     </style>
 </resources>

@@ -148,26 +148,6 @@
                     android:textSize="20sp" />
             </LinearLayout>
         </LinearLayout>
-
-        <TextView
-            android:id="@+id/btn_reset"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom|end"
-            android:layout_marginRight="16dp"
-            android:layout_marginBottom="136dp"
-            android:background="@drawable/bg_reset_pill"
-            android:clickable="true"
-            android:focusable="false"
-            android:gravity="center_vertical"
-            android:paddingLeft="20dp"
-            android:paddingRight="20dp"
-            android:paddingTop="11dp"
-            android:paddingBottom="11dp"
-            android:text="↺ 还原"
-            android:textColor="@color/text"
-            android:textSize="16sp"
-            android:visibility="gone" />
     </FrameLayout>
 
     <LinearLayout
@@ -227,7 +207,10 @@
                 android:overScrollMode="never"
                 android:requiresFadingEdge="vertical"
                 android:scrollbarStyle="insideInset"
-                android:scrollbars="vertical">
+                android:scrollbars="vertical"
+                android:scrollbarSize="4dp"
+                android:scrollbarFadeDuration="400"
+                android:scrollbarThumbVertical="@drawable/scroll_thumb">
 
                 <LinearLayout
                     android:id="@+id/menu_items"
@@ -244,7 +227,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal|top"
         android:layout_marginTop="96dp"
-        android:background="#CC0B0C10"
+        android:background="@drawable/bg_chip"
         android:paddingLeft="18dp"
         android:paddingRight="18dp"
         android:paddingTop="8dp"

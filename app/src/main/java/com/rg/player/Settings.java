@@ -116,7 +116,7 @@ public class Settings {
     }
 
     public static boolean getLoudness(Context c) {
-        return prefs(c).getBoolean("loudness", true);
+        return prefs(c).getBoolean("loudness", false);
     }
 
     public static void setLoudness(Context c, boolean v) {
@@ -155,6 +155,14 @@ public class Settings {
 
     public static void setSpeed(Context c, float v) {
         prefs(c).edit().putFloat("speed", v).apply();
+    }
+
+    public static int getFilter(Context c) {
+        return prefs(c).getInt("video_filter", 0);
+    }
+
+    public static void putFilter(Context c, int v) {
+        prefs(c).edit().putInt("video_filter", v).apply();
     }
 
     private static SharedPreferences prefs(Context c) {

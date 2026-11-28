@@ -9,4 +9,5 @@
     <color name="accent">#FF00C8FF</color>
     <color name="accent_dim">#FF063A46</color>
     <color name="scrim">#CC000000</color>
+    <color name="icon_bg">#0D1117</color>
 </resources>

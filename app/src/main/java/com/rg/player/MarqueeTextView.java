@@ -17,6 +17,7 @@ public class MarqueeTextView extends AppCompatTextView {
     private final float gapPx;
     private final float speedPxPerSec;
     private float offset;
+    private boolean marqueeEnabled = true;
     private long lastFrame;
 
     public MarqueeTextView(Context context) {
@@ -26,8 +27,8 @@ public class MarqueeTextView extends AppCompatTextView {
     public MarqueeTextView(Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
         float d = context.getResources().getDisplayMetrics().density;
-        gapPx = 64f * d;
-        speedPxPerSec = 38f * d;
+        gapPx = 16f * d;
+        speedPxPerSec = 22f * d;
         setSingleLine(true);
     }
 
@@ -39,12 +40,22 @@ public class MarqueeTextView extends AppCompatTextView {
         invalidate();
     }
 
+    public void setMarqueeEnabled(boolean enabled) {
+        marqueeEnabled = enabled;
+        offset = 0;
+        invalidate();
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         CharSequence text = getText();
         Paint paint = getPaint();
         paint.setColor(getCurrentTextColor());
 
+        if (!marqueeEnabled) {
+            super.onDraw(canvas);
+            return;
+        }
         if (text == null || text.length() == 0) {
             super.onDraw(canvas);
             return;

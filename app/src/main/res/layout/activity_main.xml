@@ -10,9 +10,10 @@
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingLeft="12dp"
-        android:paddingRight="16dp"
-        android:paddingTop="14dp">
+        android:paddingLeft="20dp"
+        android:paddingRight="24dp"
+        android:paddingTop="20dp"
+        android:paddingBottom="0dp">
 
         <TextView
             android:id="@+id/btn_back"
@@ -43,7 +44,8 @@
         <TextView
             android:id="@+id/btn_settings"
             android:layout_width="40dp"
-            android:layout_height="34dp"
+            android:layout_height="40dp"
+            android:layout_gravity="center_vertical"
             android:background="@drawable/bg_card"
             android:clickable="true"
             android:focusable="true"
@@ -57,9 +59,9 @@
         android:id="@+id/subtitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:paddingLeft="22dp"
-        android:paddingTop="2dp"
-        android:paddingBottom="6dp"
+        android:paddingLeft="30dp"
+        android:paddingTop="0dp"
+        android:paddingBottom="4dp"
         android:text="@string/loading"
         android:textColor="@color/text_sub"
         android:textSize="12sp" />
@@ -114,7 +116,13 @@
             android:clipToPadding="false"
             android:paddingLeft="14dp"
             android:paddingRight="14dp"
-            android:paddingBottom="16dp" />
+            android:paddingBottom="16dp"
+            android:scrollbars="vertical"
+            android:fadeScrollbars="true"
+            android:scrollbarSize="4dp"
+            android:scrollbarStyle="insideInset"
+            android:scrollbarFadeDuration="400"
+            android:scrollbarThumbVertical="@drawable/scroll_thumb" />
 
         <TextView
             android:id="@+id/empty"

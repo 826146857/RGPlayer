@@ -52,7 +52,7 @@ public class VlcPlayerActivity extends AppCompatActivity {
 
     private View overlay;
     private View touchCatcher;
-    private TextView btnPlay, btnPrev, btnNext, title, timeNow, timeTotal, btnReset, brightnessHint;
+    private TextView btnPlay, btnPrev, btnNext, title, timeNow, timeTotal, brightnessHint;
     private SeekBar seek;
     private View previewPanel;
     private ImageView previewImage;
@@ -73,17 +73,16 @@ public class VlcPlayerActivity extends AppCompatActivity {
     private List<VideoItem> playlist = new ArrayList<>();
     private int index;
     private boolean menuOpen;
+    private final java.util.List<TextView> menuRows = new java.util.ArrayList<>();
+    private final java.util.List<String> menuLabels = new java.util.ArrayList<>();
+    private int menuSelected;
     private Runnable menuBack;
     private java.util.function.IntConsumer menuPick;
 
     private float appVolume = 1f;
+    private float loudGain = 1f;
     private int ratioIndex;
     private float rate = 1f;
-    private float zoom = 1f;
-    private int rotationSteps;
-    private boolean pinching;
-    private float baseDist, baseZoom, baseFocusX, baseFocusY;
-    private String[] EXTRA = {"0°", "90°", "180°", "270°"};
 
     private long resumeMs;
     private boolean resumeApplied;
@@ -125,7 +124,6 @@ public class VlcPlayerActivity extends AppCompatActivity {
         btnPlay = findViewById(R.id.btn_play);
         btnPrev = findViewById(R.id.btn_prev);
         btnNext = findViewById(R.id.btn_next);
-        btnReset = findViewById(R.id.btn_reset);
         title = findViewById(R.id.player_title);
         timeNow = findViewById(R.id.time_now);
         timeTotal = findViewById(R.id.time_total);
@@ -138,59 +136,29 @@ public class VlcPlayerActivity extends AppCompatActivity {
         menuCard = findViewById(R.id.menu_card);
         menuItems = findViewById(R.id.menu_items);
 
-        playlist = PlaylistHolder.items();
-        index = PlaylistHolder.index();
+        String testUri = getIntent() == null ? null : getIntent().getStringExtra("test_uri");
+        if (testUri != null) {
+            String p = "file".equals(Uri.parse(testUri).getScheme()) ? Uri.parse(testUri).getPath() : testUri;
+            currentPath = p;
+            String nm = p == null ? "test" : new java.io.File(p).getName();
+            playlist = new ArrayList<>();
+            playlist.add(new VideoItem(0, Uri.parse(testUri), nm, 0, 0, "", "", "", 0, ""));
+            index = 0;
+        } else {
+            playlist = PlaylistHolder.items();
+            index = PlaylistHolder.index();
+        }
+        long startMs = getIntent() == null ? -1 : getIntent().getLongExtra("start_ms", -1);
+        if (startMs > 0) {
+            pendingSeekMs = startMs;
+            Toast.makeText(this, "VLC 核心：旋转/缩放不可用", Toast.LENGTH_SHORT).show();
+        }
         if (playlist == null || playlist.isEmpty()) {
             finish();
             return;
         }
 
-        List<String> options = new ArrayList<>();
-        options.add("--audio-time-stretch");
-        options.add("--avcodec-hw=any");
-        options.add("--no-drop-late-frames");
-        options.add("--no-skip-frames");
-        options.add("--sub-autodetect-file");
-        options.add("--video-filter=transform");
-        libVLC = new LibVLC(this, options);
-        mp = new MediaPlayer(libVLC);
-        mp.attachViews(videoLayout, null, false, false);
-
-        mp.setEventListener(event -> {
-            switch (event.type) {
-                case MediaPlayer.Event.TimeChanged:
-                case MediaPlayer.Event.LengthChanged:
-                    updateProgress();
-                    break;
-                case MediaPlayer.Event.Playing:
-                    btnPlay.setText("❚❚");
-                    if (!resumeApplied) {
-                        resumeApplied = true;
-                        if (resumeMs > 1000) {
-                            mp.setTime(resumeMs);
-                            showChip("从 " + formatDuration(resumeMs) + " 继续", 1200);
-                        }
-                    }
-                    updateProgress();
-                    break;
-                case MediaPlayer.Event.Paused:
-                    btnPlay.setText("▶");
-                    savePosition();
-                    break;
-                case MediaPlayer.Event.EndReached:
-                    android.util.Log.i("RGPlayerVLC", "EndReached");
-                    if (!endHandled) {
-                        endHandled = true;
-                        onEnded();
-                    }
-                    break;
-                case MediaPlayer.Event.EncounteredError:
-                    Toast.makeText(this, "VLC 无法播放该文件", Toast.LENGTH_LONG).show();
-                    break;
-                default:
-                    break;
-            }
-        });
+        createPlayer();
 
         btnPlay.setOnClickListener(v -> togglePlay());
         btnPrev.setOnClickListener(v -> switchBy(-1));
@@ -219,16 +187,88 @@ public class VlcPlayerActivity extends AppCompatActivity {
             }
         });
 
-        btnReset.setOnClickListener(v -> resetTransform());
 
         menuLayer.setOnClickListener(v -> dismissMenu(true));
         menuLayer.setAlpha(1f);
 
         touchCatcher.setOnTouchListener(this::onTouch);
 
+        addCoreChip("核心：VLC", () -> {
+            long pos = 0;
+            try {
+                pos = mp.getTime();
+            } catch (Throwable ignored) {
+            }
+            Intent i = new Intent(this, PlayerActivity.class);
+            i.putExtra("start_ms", pos);
+            startActivity(i);
+            finish();
+        });
+
         setOverlayVisible(false);
         play(index, true);
         handler.post(tick);
+    }
+
+    private void createPlayer() {
+        List<String> options = new ArrayList<>();
+        options.add("--audio-time-stretch");
+        options.add("--avcodec-hw=any");
+        options.add("--no-drop-late-frames");
+        options.add("--no-skip-frames");
+        options.add("--sub-autodetect-file");
+        libVLC = new LibVLC(this, options);
+        mp = new MediaPlayer(libVLC);
+        mp.attachViews(videoLayout, null, false, false);
+
+        mp.setEventListener(event -> {
+            switch (event.type) {
+                case MediaPlayer.Event.TimeChanged:
+                case MediaPlayer.Event.LengthChanged:
+                    updateProgress();
+                    break;
+                case MediaPlayer.Event.Playing:
+                    if (mp.getVideoTracksCount() == 0 && mp.getAudioTracksCount() == 0) {
+                        android.util.Log.e("RGTest", "unsupported path=" + currentPath);
+                        Toast.makeText(this, "无法识别的文件，已退出播放", Toast.LENGTH_LONG).show();
+                        finish();
+                        break;
+                    }
+                    android.util.Log.i("RGTest", "playing path=" + currentPath
+                            + " len=" + mp.getLength() + " v=" + mp.getVideoTracksCount()
+                            + " a=" + mp.getAudioTracksCount() + " s=" + mp.getSpuTracksCount());
+                    btnPlay.setText("❚❚");
+                    if (!resumeApplied) {
+                        resumeApplied = true;
+                        if (resumeMs > 1000) {
+                            mp.setTime(resumeMs);
+                            showChip("从 " + formatDuration(resumeMs) + " 继续", 1200);
+                        }
+                    }
+                    applyVolume();
+                    updateProgress();
+                    break;
+                case MediaPlayer.Event.Paused:
+                    btnPlay.setText("▶");
+                    savePosition();
+                    break;
+                case MediaPlayer.Event.EndReached:
+                    android.util.Log.i("RGPlayerVLC", "EndReached");
+                    if (!endHandled) {
+                        endHandled = true;
+                        onEnded();
+                    }
+                    break;
+                case MediaPlayer.Event.EncounteredError:
+                    android.util.Log.e("RGTest", "error path=" + currentPath
+                            + " state=" + mp.getPlayerState());
+                    Toast.makeText(this, "VLC 无法播放该文件", Toast.LENGTH_LONG).show();
+                    break;
+                default:
+                    break;
+            }
+        });
+
     }
 
     // ---------------- 播放控制 ----------------
@@ -242,8 +282,6 @@ public class VlcPlayerActivity extends AppCompatActivity {
         title.setText(stripExtension(item.name));
         btnPrev.setAlpha(i > 0 ? 1f : 0.35f);
         btnNext.setAlpha(i + 1 < playlist.size() ? 1f : 0.35f);
-        zoom = 1f;
-        updateResetButton();
 
         mp.stop();
         if (keepFd != null) {
@@ -259,12 +297,11 @@ public class VlcPlayerActivity extends AppCompatActivity {
             resumeMs = pendingSeekMs;
             pendingSeekMs = -1;
         }
-        if (resetResume) resumeMs = MediaLibrary.position(this, item.uri);
         resumeApplied = false;
 
         Media media = buildMedia(item);
-        int rot = rotationSteps % 4;
-        media.addOption(":transform-type=" + (rot == 1 ? "90" : rot == 2 ? "180" : rot == 3 ? "270" : "0"));
+        // 单扬声器音效优化：动态压缩，对白更清楚
+        media.addOption(":audio-filter=compressor");
         media.addOption(":sub-text-scale=1.4");
         media.addOption(":sub-margin=24");
         Uri storedSub = resolveSubtitle(item);
@@ -274,9 +311,11 @@ public class VlcPlayerActivity extends AppCompatActivity {
             String auto = findSiblingSubtitle();
             if (auto != null) media.addOption(":sub-file=" + auto);
         }
-        media.setHWDecoderEnabled(rotationSteps % 4 == 0, rotationSteps % 4 == 0);
+        media.setHWDecoderEnabled(true, true);
         mp.setMedia(media);
         media.release();
+        loudGain = 1f;
+        applyLoudness(item);
         mp.setRate(rate);
         mp.play();
         updateProgress();
@@ -284,6 +323,13 @@ public class VlcPlayerActivity extends AppCompatActivity {
 
     private Media buildMedia(VideoItem item) {
         try {
+            if ("file".equals(item.uri.getScheme())) {
+                String p = item.uri.getPath();
+                if (p != null) {
+                    currentPath = p;
+                    return new Media(libVLC, p);
+                }
+            }
             if ("content".equals(item.uri.getScheme())) {
                 android.database.Cursor c = getContentResolver().query(item.uri, new String[]{"_data"}, null, null, null);
                 if (c != null) {
@@ -359,6 +405,25 @@ public class VlcPlayerActivity extends AppCompatActivity {
         }
     }
 
+    private void addCoreChip(String text, Runnable onClick) {
+        TextView chip = new TextView(this);
+        chip.setText(text);
+        chip.setTextSize(12);
+        chip.setTextColor(0xFF35C8FF);
+        chip.setPadding(dp(10), dp(6), dp(10), dp(6));
+        chip.setBackgroundResource(R.drawable.bg_reset_pill);
+        chip.setClickable(true);
+        chip.setFocusable(false);
+        chip.setOnClickListener(v -> onClick.run());
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.gravity = android.view.Gravity.TOP | android.view.Gravity.END;
+        lp.topMargin = dp(56);
+        lp.rightMargin = dp(14);
+        ((ViewGroup) findViewById(R.id.overlay)).addView(chip, lp);
+    }
+
     private void updateProgress() {
         long dur = mp.getLength();
         long pos = mp.getTime();
@@ -384,20 +449,6 @@ public class VlcPlayerActivity extends AppCompatActivity {
         }
     }
 
-    private void resetTransform() {
-        long t = mp.getTime();
-        zoom = 1f;
-        rotationSteps = 0;
-        pendingSeekMs = t;
-        resumeApplied = false;
-        try {
-            mp.setScale(0f);
-        } catch (Throwable ignored) {
-        }
-        play(index, false);
-        updateResetButton();
-    }
-
     // ---------------- 界面 ----------------
 
     private void setOverlayVisible(boolean visible) {
@@ -406,16 +457,13 @@ public class VlcPlayerActivity extends AppCompatActivity {
             overlay.setAlpha(0f);
             overlay.animate().alpha(1f).setDuration(160).withEndAction(() -> {
                 overlay.setVisibility(View.VISIBLE);
-                updateResetButton();
             }).start();
             scheduleHide();
         } else {
             overlay.animate().alpha(0f).setDuration(160).withEndAction(() -> {
                 overlay.setVisibility(View.INVISIBLE);
-                updateResetButton();
             }).start();
             handler.removeCallbacks(hideTask);
-            if (btnReset != null) btnReset.setVisibility(View.GONE);
         }
     }
 
@@ -437,11 +485,33 @@ public class VlcPlayerActivity extends AppCompatActivity {
 
     private final Runnable hideHintTask = () -> brightnessHint.setVisibility(View.GONE);
 
-    private void updateResetButton() {
-        if (btnReset == null) return;
-        boolean active = Math.abs(zoom - 1f) > 0.01f || rotationSteps % 4 != 0;
-        boolean overlayVisible = overlay != null && overlay.getVisibility() == View.VISIBLE;
-        btnReset.setVisibility(active && overlayVisible ? View.VISIBLE : View.GONE);
+    // ---------------- 音频 ----------------
+
+    private void applyVolume() {
+        if (mp == null) return;
+        int v = Math.round(100f * appVolume * loudGain);
+        v = Math.max(0, Math.min(200, v));
+        mp.setVolume(v);
+    }
+
+    private void applyLoudness(VideoItem item) {
+        if (Settings.hasLoudGain(this, item.uri)) {
+            float db = Settings.getLoudGain(this, item.uri);
+            loudGain = (float) Math.pow(10, db / 20f);
+            return;
+        }
+        final android.net.Uri uri = item.uri;
+        new Thread(() -> {
+            float db = LoudnessAnalyzer.analyze(this, item);
+            Settings.putLoudGain(this, uri, db);
+            runOnUiThread(() -> {
+                if (playlist != null && index < playlist.size()
+                        && playlist.get(index).uri.equals(uri)) {
+                    loudGain = (float) Math.pow(10, db / 20f);
+                    applyVolume();
+                }
+            });
+        }).start();
     }
 
     // ---------------- 菜单 ----------------
@@ -450,19 +520,17 @@ public class VlcPlayerActivity extends AppCompatActivity {
         final String[] items = {
                 "画面比例：" + ratioLabel(),
                 "播放速度：" + formatSpeed(rate),
-                "旋转：" + EXTRA[rotationSteps % 4],
-                "字幕",
-                "音轨",
+                "字幕：" + subLabel(),
+                "音轨：" + audioLabel(),
                 "视频信息"
         };
         showMenuPanel("", items, null, which -> {
             switch (which) {
                 case 0: cycleRatio(); break;
                 case 1: chooseSpeed(); break;
-                case 2: rotateStep(); break;
-                case 3: showSubtitles(); break;
-                case 4: showAudio(); break;
-                case 5: showVideoInfo(); break;
+                case 2: showSubtitles(); break;
+                case 3: showAudio(); break;
+                case 4: showVideoInfo(); break;
             }
         });
     }
@@ -470,6 +538,9 @@ public class VlcPlayerActivity extends AppCompatActivity {
     private void showMenuPanel(String header, String[] list, Runnable backAction, java.util.function.IntConsumer pick) {
         menuBack = backAction;
         menuPick = pick;
+        menuRows.clear();
+        menuLabels.clear();
+        menuSelected = 0;
         menuItems.removeAllViews();
         if (header != null && !header.isEmpty()) {
             TextView h = new TextView(this);
@@ -564,20 +635,48 @@ public class VlcPlayerActivity extends AppCompatActivity {
         }
     }
 
-    private void rotateStep() {
-        pendingSeekMs = mp.getTime();
-        resumeApplied = false;
-        rotationSteps = (rotationSteps + 1) % 4;
-        play(index, false);
-        showChip("旋转 " + EXTRA[rotationSteps], 800);
-    }
-
     private void chooseSpeed() {
         showMenuPanel("播放速度", SPEED_LABELS, this::showMenu, which -> {
             rate = SPEEDS[which];
             mp.setRate(rate);
             showChip(formatSpeed(rate), 800);
         });
+    }
+
+    private static String shortTrackName(String name) {
+        if (name == null) return "未知";
+        int a = name.lastIndexOf('[');
+        int b = name.lastIndexOf(']');
+        if (a >= 0 && b > a) return name.substring(a + 1, b);
+        return name;
+    }
+
+    private String audioLabel() {
+        MediaPlayer.TrackDescription[] ts = mp.getAudioTracks();
+        if (ts == null || ts.length == 0) return "无";
+        int cur = mp.getAudioTrack();
+        if (cur < 0) {
+            for (MediaPlayer.TrackDescription t : ts) {
+                if (t.id >= 0) return shortTrackName(t.name);
+            }
+            return "无";
+        }
+        for (MediaPlayer.TrackDescription t : ts) {
+            if (t.id == cur) return shortTrackName(t.name);
+        }
+        return "无";
+    }
+
+    private String subLabel() {
+        MediaPlayer.TrackDescription[] ts = mp.getSpuTracks();
+        int cur = mp.getSpuTrack();
+        if (cur < 0) return "关闭";
+        if (ts != null) {
+            for (MediaPlayer.TrackDescription t : ts) {
+                if (t.id == cur) return shortTrackName(t.name);
+            }
+        }
+        return "关闭";
     }
 
     private void showAudio() {
@@ -588,8 +687,17 @@ public class VlcPlayerActivity extends AppCompatActivity {
         }
         List<String> labels = new ArrayList<>();
         final List<Integer> ids = new ArrayList<>();
+        int curA = mp.getAudioTrack();
+        if (curA < 0) {
+            for (MediaPlayer.TrackDescription t : tracks) {
+                if (t.id >= 0) {
+                    curA = t.id;
+                    break;
+                }
+            }
+        }
         for (MediaPlayer.TrackDescription t : tracks) {
-            labels.add((t.id == mp.getAudioTrack() ? "✓ " : "") + t.name);
+            labels.add((t.id == curA ? "✓ " : "") + t.name);
             ids.add(t.id);
         }
         showMenuPanel("音轨", labels.toArray(new String[0]), this::showMenu,
@@ -716,16 +824,29 @@ public class VlcPlayerActivity extends AppCompatActivity {
         tv.setLineSpacing(2f, 1.15f);
         int pad = dp(18);
         tv.setPadding(pad, pad, pad, pad);
-        android.widget.ScrollView sc = new android.widget.ScrollView(this);
+        final android.view.View[] overlayRef = new android.view.View[1];
+        TapDismissScrollView sc = new TapDismissScrollView(new android.view.ContextThemeWrapper(this, R.style.RGScroll), () -> {
+            if (overlayRef[0] != null && overlayRef[0].getParent() instanceof ViewGroup) {
+                ((ViewGroup) overlayRef[0].getParent()).removeView(overlayRef[0]);
+            }
+        });
         sc.addView(tv);
-        sc.setBackgroundResource(R.drawable.bg_info);
 
         FrameLayout card = new FrameLayout(this);
         card.setBackgroundResource(R.drawable.bg_info);
         card.setClipToOutline(true);
-        int cardW = (int) (getResources().getDisplayMetrics().widthPixels * 0.92f);
+        int screenW = getResources().getDisplayMetrics().widthPixels;
         int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.8f);
-        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(cardW, maxH);
+        int textMax = 0;
+        for (String line : sb.toString().split("\n")) {
+            textMax = Math.max(textMax, (int) Math.ceil(tv.getPaint().measureText(line)));
+        }
+        int cardW = Math.max((int) (screenW * 0.5f),
+                Math.min((int) (screenW * 0.92f), textMax + 2 * pad));
+        tv.measure(View.MeasureSpec.makeMeasureSpec(cardW - 2 * pad, View.MeasureSpec.AT_MOST),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        int cardH = Math.min(tv.getMeasuredHeight(), maxH);
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(cardW, cardH);
         clp.gravity = android.view.Gravity.CENTER;
         card.addView(sc, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -734,8 +855,16 @@ public class VlcPlayerActivity extends AppCompatActivity {
         FrameLayout infoOverlay = new FrameLayout(this);
         infoOverlay.setBackgroundColor(0x99000000);
         infoOverlay.setClickable(true);
+        overlayRef[0] = infoOverlay;
         infoOverlay.addView(card, clp);
-        infoOverlay.setOnClickListener(vv -> ((ViewGroup) infoOverlay.getParent()).removeView(infoOverlay));
+        android.view.View.OnTouchListener tapOut = (vv, ee) -> {
+            if (ee.getAction() == android.view.MotionEvent.ACTION_UP) {
+                ((ViewGroup) infoOverlay.getParent()).removeView(infoOverlay);
+            }
+            return true;
+        };
+        infoOverlay.setOnTouchListener(tapOut);
+        card.setOnTouchListener(tapOut);
 
         ViewGroup root = findViewById(android.R.id.content);
         root.addView(infoOverlay, new FrameLayout.LayoutParams(
@@ -746,21 +875,6 @@ public class VlcPlayerActivity extends AppCompatActivity {
     // ---------------- 手势 ----------------
 
     private boolean onTouch(View v, MotionEvent e) {
-        if (e.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN || e.getActionMasked() == MotionEvent.ACTION_POINTER_UP) {
-            if (e.getPointerCount() >= 2) {
-                if (e.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN) {
-                    pinching = true;
-                    gestureUsed = true;
-                    baseDist = pointerDist(e);
-                    baseZoom = zoom;
-                    baseFocusX = (e.getX(0) + e.getX(1)) / 2f;
-                    baseFocusY = (e.getY(0) + e.getY(1)) / 2f;
-                }
-            } else {
-                pinching = false;
-            }
-            return true;
-        }
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 downX = e.getX();
@@ -778,17 +892,6 @@ public class VlcPlayerActivity extends AppCompatActivity {
                 return true;
 
             case MotionEvent.ACTION_MOVE: {
-                if (pinching && e.getPointerCount() >= 2) {
-                    float d = pointerDist(e);
-                    zoom = Math.max(1f, Math.min(4f, baseZoom * (d / Math.max(1f, baseDist))));
-                    try {
-                        mp.setScale(zoom <= 1.01f ? 0f : zoom);
-                    } catch (Throwable ignored) {
-                    }
-                    showChip("缩放 " + Math.round(zoom * 100) + "%", 500);
-                    updateResetButton();
-                    return true;
-                }
                 float dx = e.getX() - downX;
                 float dy = e.getY() - downY;
                 if (edgeGesture) {
@@ -820,7 +923,7 @@ public class VlcPlayerActivity extends AppCompatActivity {
                             applyBrightness(startBrightness + factor * 0.9f);
                         } else if (downX > w * 3f / 4f) {
                             appVolume = Math.max(0f, Math.min(1f, startVolume + factor));
-                            mp.setVolume((int) (appVolume * 100));
+                            applyVolume();
                             showChip("音量 " + Math.round(appVolume * 100) + "%", 600);
                         }
                         return true;
@@ -881,7 +984,6 @@ public class VlcPlayerActivity extends AppCompatActivity {
             }
 
             case MotionEvent.ACTION_POINTER_UP:
-                pinching = false;
                 return true;
 
             case MotionEvent.ACTION_CANCEL:
@@ -950,9 +1052,40 @@ public class VlcPlayerActivity extends AppCompatActivity {
 
     // ---------------- 按键 ----------------
 
+    private void updateMenuCursor() {
+        for (int i = 0; i < menuRows.size(); i++) {
+            TextView row = menuRows.get(i);
+            boolean sel = i == menuSelected;
+            row.setText(menuLabels.get(i));
+            row.setTextColor(sel ? 0xFF35C8FF : 0xFFEEF0F4);
+            row.setBackgroundResource(sel ? R.drawable.bg_row_focus : 0);
+        }
+    }
+
+    private void moveMenuCursor(int delta) {
+        if (menuRows.isEmpty()) return;
+        menuSelected = Math.max(0, Math.min(menuRows.size() - 1, menuSelected + delta));
+        updateMenuCursor();
+    }
+
+    private void activateMenuCursor() {
+        if (menuSelected < 0 || menuSelected >= menuRows.size()) return;
+        final int idx = menuSelected;
+        dismissMenu(true);
+        if (menuPick != null) menuPick.accept(idx);
+    }
+
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (menuOpen) {
+            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) { moveMenuCursor(-1); return true; }
+            if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) { moveMenuCursor(1); return true; }
+            if (keyCode == KeyEvent.KEYCODE_BUTTON_A || keyCode == KeyEvent.KEYCODE_ENTER
+                    || keyCode == KeyEvent.KEYCODE_SPACE || keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+                activateMenuCursor();
+                return true;
+            }
+            if (keyCode == KeyEvent.KEYCODE_BUTTON_B) { dismissMenu(true); return true; }
             if (keyCode == KeyEvent.KEYCODE_BACK) {
                 if (menuBack != null) menuBack.run();
                 else dismissMenu(true);
@@ -960,6 +1093,10 @@ public class VlcPlayerActivity extends AppCompatActivity {
             }
         }
         switch (keyCode) {
+            case KeyEvent.KEYCODE_BUTTON_X:
+            case KeyEvent.KEYCODE_BUTTON_Y:
+                Toast.makeText(this, "VLC 内核不支持滤镜", Toast.LENGTH_SHORT).show();
+                return true;
             case KeyEvent.KEYCODE_BUTTON_A:
             case KeyEvent.KEYCODE_ENTER:
             case KeyEvent.KEYCODE_SPACE:

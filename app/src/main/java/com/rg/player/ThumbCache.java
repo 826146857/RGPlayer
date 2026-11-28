@@ -24,23 +24,62 @@ public final class ThumbCache {
 
     private static final java.util.concurrent.ConcurrentHashMap<String, Integer> DONE =
             new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.ConcurrentHashMap<String, Float> PROG =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.ConcurrentHashMap<String, Boolean> SCANNING =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     private ThumbCache() {
     }
 
     public static float progress(android.content.Context c, android.net.Uri uri) {
         String key = id(uri);
-        Integer d = DONE.get(key);
-        int total = metaCount(c, uri, 0);
-        if (d == null) {
-            int n = 0;
-            for (int i = 0; i < total; i++) {
-                if (file(c, uri, i).exists()) n++;
-            }
-            DONE.put(key, n);
-            d = n;
+        Float p = PROG.get(key);
+        if (p != null) return p;
+        if (SCANNING.putIfAbsent(key, Boolean.TRUE) == null) {
+            POOL.execute(() -> {
+                try {
+                    int total = metaCount(c, uri, 0);
+                    int n = 0;
+                    for (int i = 0; i < total; i++) {
+                        if (file(c, uri, i).exists()) n++;
+                    }
+                    PROG.put(key, Math.min(1f, n / (float) Math.max(1, total)));
+                } finally {
+                    SCANNING.remove(key);
+                }
+            });
         }
-        return Math.min(1f, d / (float) Math.max(1, total));
+        return 0f;
+    }
+
+    public static int prune(android.content.Context c, java.util.Set<String> aliveUris) {
+        java.util.Set<String> ids = new java.util.HashSet<>();
+        for (String u : aliveUris) ids.add(id(android.net.Uri.parse(u)));
+        java.io.File[] files = dir(c).listFiles();
+        if (files == null) return 0;
+        int removed = 0;
+        for (java.io.File f : files) {
+            String n = f.getName();
+            boolean keep = false;
+            for (String id : ids) {
+                if (n.startsWith(id + "_") || n.startsWith(id + ".")) {
+                    keep = true;
+                    break;
+                }
+            }
+            if (!keep && f.delete()) removed++;
+        }
+        DONE.keySet().removeIf(k -> !ids.contains(k));
+        PROG.keySet().removeIf(k -> !ids.contains(k));
+        SCANNING.keySet().removeIf(k -> !ids.contains(k));
+        return removed;
+    }
+
+    public static void reset() {
+        DONE.clear();
+        PROG.clear();
+        SCANNING.clear();
     }
 
     private static File dir(Context c) {
@@ -122,6 +161,7 @@ public final class ThumbCache {
                     fos = new FileOutputStream(out);
                     scaled.compress(Bitmap.CompressFormat.JPEG, 72, fos);
                     DONE.put(id(item.uri), i + 1);
+                    PROG.put(id(item.uri), Math.min(1f, (i + 1) / (float) Math.max(1, total)));
                 } catch (Throwable ignored) {
                 } finally {
                     if (fos != null) try { fos.close(); } catch (Throwable ignored) {}
@@ -131,6 +171,8 @@ public final class ThumbCache {
         } catch (Throwable ignored) {
         } finally {
             try { r.release(); } catch (Throwable ignored) {}
+            Integer d = DONE.get(id(item.uri));
+            if (d != null) PROG.put(id(item.uri), Math.min(1f, d / (float) Math.max(1, total)));
         }
     }
 
